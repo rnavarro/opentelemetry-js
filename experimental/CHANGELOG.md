@@ -16,6 +16,7 @@ For notes on migrating to 2.x / 0.200.x see [the upgrade guide](doc/upgrade-to-2
 ### :rocket: Features
 
 * feat(sdk-logs)!: add support for attributes in LoggerOptions [#6573](https://github.com/open-telemetry/opentelemetry-js/pull/6573) @pichlermarc
+* feat(otlp-transformer): serialize exemplars on all metric data point types [#6483](https://github.com/open-telemetry/opentelemetry-js/pull/6483) @CharlieTLe
 
 ### :bug: Bug Fixes
 
