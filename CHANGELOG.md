@@ -19,8 +19,6 @@ For notes on migrating to 2.x / 0.200.x see [the upgrade guide](doc/upgrade-to-2
 
 ### :bug: Bug Fixes
 
-* fix(sdk-metrics): fix mutation bug in ExemplarBucket.collect() that corrupted shared attributes [#6483](https://github.com/open-telemetry/opentelemetry-js/pull/6483) @CharlieTLe
-
 ### :books: Documentation
 
 ### :house: Internal
