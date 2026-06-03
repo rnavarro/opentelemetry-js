@@ -202,8 +202,11 @@ function toExemplars(
       filteredAttributes: toAttributes(exemplar.filteredAttributes, encoder),
       timeUnixNano: encoder.encodeHrTime(exemplar.timestamp),
       asDouble: exemplar.value,
-      spanId: exemplar.spanId,
-      traceId: exemplar.traceId,
+      // span/trace ids are hex strings in the SDK; the protobuf wire format
+      // expects bytes, so they must go through the encoder like span ids in
+      // the trace transformer do (JSON encoding passes them through).
+      spanId: encoder.encodeOptionalSpanContext(exemplar.spanId),
+      traceId: encoder.encodeOptionalSpanContext(exemplar.traceId),
     };
     return result;
   });

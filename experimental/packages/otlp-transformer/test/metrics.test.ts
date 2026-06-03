@@ -16,6 +16,7 @@ import {
 } from '@opentelemetry/sdk-metrics';
 import * as assert from 'assert';
 import { createExportMetricsServiceRequest } from '../src/metrics/internal';
+import { hexToBinary } from '../src/common/hex-to-binary';
 import { EAggregationTemporality } from '../src/metrics/internal-types';
 import {
   PROTOBUF_ENCODER,
@@ -864,8 +865,10 @@ describe('Metrics', () => {
       ],
       timeUnixNano: encodeAsLongBits(EXEMPLAR_TIME),
       asDouble: 42.5,
-      spanId: 'aabbccdd11223344',
-      traceId: '00112233445566778899aabbccddeeff',
+      // the PROTOBUF encoder turns hex span/trace ids into bytes, matching the
+      // proto wire format (Mimir rejects exemplars with non-bytes ids)
+      spanId: hexToBinary('aabbccdd11223344'),
+      traceId: hexToBinary('00112233445566778899aabbccddeeff'),
     };
 
     const expectedExemplarWithoutTrace = {
@@ -1059,6 +1062,62 @@ describe('Metrics', () => {
         dataPoint.exemplars,
         undefined,
         'exemplars should not be present when not provided'
+      );
+    });
+
+    it('round-trips exemplars through the protobuf serializer wire bytes', () => {
+      // Regression test: the direct protobuf serializer must emit exemplars
+      // (it does not go through createExportMetricsServiceRequest), and the
+      // span/trace ids must arrive as bytes on the wire.
+      const metricData: MetricData = {
+        descriptor: {
+          description: 'a histogram',
+          name: 'hist',
+          unit: '1',
+          valueType: ValueType.DOUBLE,
+        },
+        aggregationTemporality: AggregationTemporality.CUMULATIVE,
+        dataPointType: DataPointType.HISTOGRAM,
+        dataPoints: [
+          {
+            value: {
+              sum: 42.5,
+              count: 1,
+              min: 42.5,
+              max: 42.5,
+              buckets: {
+                boundaries: [10, 50, 100],
+                counts: [0, 1, 0, 0],
+              },
+            },
+            startTime: START_TIME,
+            endTime: END_TIME,
+            attributes: ATTRIBUTES,
+            exemplars: [exemplarWithTrace],
+          },
+        ],
+      };
+      const serialized = ProtobufMetricsSerializer.serializeRequest(
+        createResourceMetrics([metricData])
+      );
+      assert.ok(serialized, 'serialized response is undefined');
+      const decoded =
+        signals.opentelemetry.proto.collector.metrics.v1.ExportMetricsServiceRequest.decode(
+          serialized
+        );
+      const dataPoint =
+        decoded.resourceMetrics![0].scopeMetrics![0].metrics![0].histogram!
+          .dataPoints![0];
+      assert.strictEqual(dataPoint.exemplars!.length, 1);
+      const exemplar = dataPoint.exemplars![0];
+      assert.strictEqual(exemplar.asDouble, 42.5);
+      assert.strictEqual(
+        Buffer.from(exemplar.spanId!).toString('hex'),
+        'aabbccdd11223344'
+      );
+      assert.strictEqual(
+        Buffer.from(exemplar.traceId!).toString('hex'),
+        '00112233445566778899aabbccddeeff'
       );
     });
   });
