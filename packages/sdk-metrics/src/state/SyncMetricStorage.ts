@@ -66,6 +66,11 @@ export class SyncMetricStorage<T extends Maybe<Accumulation>>
     context: Context,
     recordTime: HrTime
   ) {
+    // Keep the original measurement attributes for the exemplar reservoir:
+    // exemplars must retain attributes that the view configuration drops from
+    // the data point (the reservoir diffs them against the point attributes
+    // at collection time to compute filteredAttributes).
+    const measurementAttributes = attributes;
     attributes = this._attributesProcessor.process(attributes, context);
     this._deltaMetricStorage.record(value, attributes, context, recordTime);
 
@@ -78,7 +83,7 @@ export class SyncMetricStorage<T extends Maybe<Accumulation>>
         attributes,
         this._exemplarReservoirFactory
       );
-      reservoir?.offer(value, recordTime, attributes, context);
+      reservoir?.offer(value, recordTime, measurementAttributes, context);
     }
   }
 

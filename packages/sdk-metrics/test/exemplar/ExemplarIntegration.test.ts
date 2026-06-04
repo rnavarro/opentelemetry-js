@@ -13,6 +13,7 @@ import {
   NeverSampleExemplarFilter,
   WithTraceExemplarFilter,
   SimpleFixedSizeExemplarReservoir,
+  createAllowListAttributesProcessor,
 } from '../../src';
 import { TestMetricReader } from '../export/TestMetricReader';
 import type { Exemplar } from '../../src/exemplar/Exemplar';
@@ -304,6 +305,45 @@ describe('Exemplar Integration', () => {
           `filteredAttributes should not contain key '${key}' with same value as data point`
         );
       }
+    });
+
+    it('should retain attributes dropped from the data point by a view', async () => {
+      // Spec: "Exemplars MUST retain any attributes available in the
+      // measurement that are not preserved by aggregation or view
+      // configuration." A view that narrows attributeKeys drops attributes
+      // from the data point; those attributes must surface on the exemplar
+      // as filteredAttributes.
+      const reader = new TestMetricReader();
+      const provider = new MeterProvider({
+        readers: [reader],
+        exemplarFilter: new AlwaysSampleExemplarFilter(),
+        views: [
+          {
+            instrumentName: 'test_counter',
+            attributesProcessors: [createAllowListAttributesProcessor(['kept'])],
+          },
+        ],
+      });
+
+      const meter = provider.getMeter('test');
+      const counter = meter.createCounter('test_counter');
+
+      const ctx = tracedContext(
+        '0102030405060708',
+        '0102030405060708090a0b0c0d0e0f10'
+      );
+
+      counter.add(10, { kept: 'point-attr', dropped: 'exemplar-only' }, ctx);
+
+      const { resourceMetrics } = await reader.collect();
+      const dataPoint =
+        resourceMetrics.scopeMetrics[0].metrics[0].dataPoints[0];
+      const exemplar = dataPoint.exemplars![0] as Exemplar;
+
+      assert.deepStrictEqual(dataPoint.attributes, { kept: 'point-attr' });
+      assert.deepStrictEqual(exemplar.filteredAttributes, {
+        dropped: 'exemplar-only',
+      });
     });
   });
 
